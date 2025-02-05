@@ -1,0 +1,17 @@
+# This is a gitallow. It ignores everything by default.
+*
+!*/
+
+!/.gitignore
+!.cargo/config.toml
+!/src/*.rs
+!/xtask/**/*.rs
+!**/Cargo.toml
+!/README.md
+
+!server/index.js
+# Only root level's package.json (prevents node_modules/**/package.json from being checked)
+!/package.json
+
+# Explicitly ignore to be safe
+node_modules/*

@@ -1,0 +1,24 @@
+{
+  "name": "parser",
+  "version": "1.0.0",
+  "main": "parser/index.js",
+  "author": "Thaza_Kun <61819672+Thaza-Kun@users.noreply.github.com>",
+  "license": "MIT",
+  "dependencies": {
+    "cli-progress": "^3.12.0",
+    "graceful-fs": "^4.2.11",
+    "js-yaml": "^4.1.0",
+    "parse-md": "^3.0.3",
+    "wtf-plugin-markdown": "^1.0.1",
+    "wtf_wikipedia": "^10.3.2"
+  },
+  "scripts": {
+    "parse": "bun run parser/index.js"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

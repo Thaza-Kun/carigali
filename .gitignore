@@ -1,0 +1,13 @@
+# This is a gitallow. It ignores everything by default.
+*
+!*/
+
+!/.gitignore
+
+!/Cargo.toml
+!/README.md
+
+!/preprocessors/*
+!/src/*.rs
+
+!/recipes.sql
