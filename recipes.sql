@@ -77,14 +77,6 @@ WITH counting AS (
 SELECT 
     -- NO NATIVE LOG10 FUNCTION SO this is equivalent to 10^{idf} <= N/DF
     doctotal/cast(docfreq as real) as power_of_idf,
-    2*(
-        ((doctotal/cast(docfreq as real))/1)
-        +(
-            (doctotal/cast(docfreq as real))*
-            (doctotal/cast(docfreq as real))*
-            (doctotal/cast(docfreq as real))/3
-        )
-    ) as idf,
     frequency as tf, 
     docfreq.lower 
 FROM docfreq 

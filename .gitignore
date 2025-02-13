@@ -9,5 +9,6 @@
 
 !/preprocessors/*
 !/src/*.rs
+!/migrations/*.sql
 
 !/recipes.sql
