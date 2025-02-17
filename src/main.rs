@@ -1,6 +1,4 @@
-#![allow(unreachable_code)]
-
-use std::{collections::HashMap, ffi::OsString};
+use std::ffi::OsString;
 
 mod cli;
 mod parser;
@@ -20,10 +18,8 @@ struct Item {
 #[tokio::main]
 async fn main() {
     let arg = cli::Args::parse();
-    let pool = SqlitePool::connect("sqlite://./test/test.db")
-        .await
-        .unwrap();
-    let processed = sqlx::query_as! {Item,"SELECT DISTINCT(document) FROM term_info"}
+    let pool = SqlitePool::connect(env!("DATABASE_URL")).await.unwrap();
+    let processed = sqlx::query_as! {Item,"SELECT DISTINCT(document) FROM doc_info"}
         .fetch_all(&pool)
         .await
         .unwrap()
@@ -46,73 +42,48 @@ async fn main() {
             break;
         }
         if !processed.contains(&name.file_name()) {
+            let n = name.file_name().into_string().unwrap();
+            let q1 = sqlx::query! {
+                r#"INSERT INTO doc_info (document, term_count) VALUES (?, 0)"#,
+                n
+            }
+            .execute(&pool);
+            let tokens = crate::parser::tokenize_file(name.path());
+            let ngram2_tokens = crate::parser::ngram2(&tokens);
+            let ngram3_tokens = crate::parser::ngram3(&tokens);
+
+            let _ = q1.await.unwrap();
+
+            let mut tasks_tok = Vec::new();
+            let mut tasks_ng2 = Vec::new();
+            let mut tasks_ng3 = Vec::new();
+
+            for t in &tokens {
+                if t.is_text() {
+                    tasks_tok.push(t.register(&n, &pool));
+                };
+            }
+            for ng2 in &ngram2_tokens {
+                tasks_ng2.push(ng2.register(&n, &pool));
+            }
+            for ng3 in &ngram3_tokens {
+                tasks_ng3.push(ng3.register(&n, &pool));
+            }
+            let _ = tasks_tok
+                .into_iter()
+                .map(|t| async { t.await.unwrap() })
+                .collect::<Vec<_>>();
+            let _ = tasks_ng2
+                .into_iter()
+                .map(|t| async { t.await.unwrap() })
+                .collect::<Vec<_>>();
+            let _ = tasks_ng3
+                .into_iter()
+                .map(|t| async { t.await.unwrap() })
+                .collect::<Vec<_>>();
             pbar.set_message(format!("{}", name.file_name().into_string().unwrap(),));
             count += 1;
             pbar.set_position(count);
-            let tokens = crate::parser::tokenize_file(name.path());
-            let mut dict: HashMap<String, u64> = HashMap::new();
-            for t in &tokens {
-                if !t.is_text() {
-                    continue;
-                };
-                let t = (t.clone()).into();
-                match dict.contains_key(&t) {
-                    true => {
-                        let c = dict.get(&t).unwrap();
-                        dict.insert(t, c + 1);
-                    }
-                    false => {
-                        dict.insert(t, 1);
-                    }
-                }
-            }
-            let n = name.file_name().into_string().unwrap();
-            for (k, v) in dict {
-                let v = v as i32;
-                let lower = k.to_lowercase();
-                let _ = sqlx::query! {
-                r#"INSERT INTO term_info (document, term, lower, occurence) VALUES (?, ?, ?, ?)"#,
-                n, k, lower, v
-            }
-            .execute(&pool)
-            .await
-            .unwrap();
-            }
-            for (t1, t2) in crate::parser::ngram2(&tokens) {
-                let term = format!("{} {}", &t1, &t2);
-                let lower1 = t1.to_lowercase();
-                let lower2 = t2.to_lowercase();
-                let _ = sqlx::query! {
-                r#"INSERT INTO ngram_two (document, term, lower1, lower2) VALUES (?, ?, ?, ?)"#,
-                        n, term, lower1, lower2
-                    }
-                .execute(&pool)
-                .await
-                .unwrap();
-            }
-            for (t1, t2, t3) in crate::parser::ngram3(&tokens) {
-                let term = format!("{} {} {}", &t1, &t2, &t3);
-                let lower1 = t1.to_lowercase();
-                let lower2 = t2.to_lowercase();
-                let lower3 = t3.to_lowercase();
-                let _ = sqlx::query! {
-                    r#"INSERT INTO ngram_three (document, term, lower1, lower2, lower3) VALUES (?, ?, ?, ?, ?)"#,
-                    n, term, lower1, lower2, lower3
-                }
-                .execute(&pool)
-                .await
-                .unwrap();
-            }
-        } else {
-            pbar.set_message(format!(
-                "SKIPPING:{}",
-                name.file_name().into_string().unwrap(),
-            ));
-            // For some reason counter is increased even though the true case block is skipped.
-            // So we manually set the counter to zero.
-            // Although logically unsound, practically, it gives the same effect as counting to the desired size
-            // because file numbers are large anyway.
-            count = 0;
         }
     }
     pbar.finish();

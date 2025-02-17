@@ -10,6 +10,7 @@ use nom::{
     sequence::delimited,
     IResult, Parser as NomParser,
 };
+use sqlx::{sqlite::SqliteQueryResult, Error, SqlitePool};
 
 #[cfg(test)]
 mod test {
@@ -149,6 +150,61 @@ fn walk_ast(ast: &Node, collector: &mut Vec<String>) {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct NGram<T>(T);
+
+impl<T> From<T> for NGram<T> {
+    fn from(value: T) -> Self {
+        NGram(value)
+    }
+}
+
+impl NGram<(&Token, &Token)> {
+    pub async fn register(
+        &self,
+        document: &str,
+        pool: &SqlitePool,
+    ) -> Result<SqliteQueryResult, Error> {
+        let k1 = self.0 .0.unwrap();
+        let k2 = self.0 .1.unwrap();
+        let lower1 = k1.to_lowercase();
+        let lower2 = k2.to_lowercase();
+        let k = format!("{} {}", k1, k2);
+        sqlx::query! {
+            r#" INSERT INTO ngram_two (document, term, lower1, lower2, occurence) VALUES (?, ?, ?, ?, 1)
+            ON CONFLICT
+                DO UPDATE SET occurence = 1 + occurence"#,
+            document, k, lower1, lower2
+        }
+        .execute(pool)
+        .await
+    }
+}
+
+impl NGram<(&Token, &Token, &Token)> {
+    pub async fn register(
+        &self,
+        document: &str,
+        pool: &SqlitePool,
+    ) -> Result<SqliteQueryResult, Error> {
+        let k1 = self.0 .0.unwrap();
+        let k2 = self.0 .1.unwrap();
+        let k3 = self.0 .2.unwrap();
+        let lower1 = k1.to_lowercase();
+        let lower2 = k2.to_lowercase();
+        let lower3 = k3.to_lowercase();
+        let k = format!("{} {} {}", k1, k2, k3);
+        sqlx::query! {
+            r#" INSERT INTO ngram_three (document, term, lower1, lower2, lower3, occurence) VALUES (?, ?, ?, ?, ?, 1)
+            ON CONFLICT
+                DO UPDATE SET occurence = 1 + occurence"#,
+        document, k, lower1, lower2, lower3
+        }
+        .execute(pool)
+        .await
+    }
+}
+
+#[derive(Debug, Clone)]
 pub(crate) enum Token {
     Text(String),
     Punct(String),
@@ -163,13 +219,34 @@ impl Token {
             _ => false,
         }
     }
+
+    fn unwrap(&self) -> String {
+        match self {
+            Token::Text(a) | Token::Punct(a) | Token::Unknown(a) | Token::Omit(a) => a.clone(),
+        }
+    }
+
+    pub async fn register(
+        &self,
+        document: &str,
+        pool: &SqlitePool,
+    ) -> Result<SqliteQueryResult, Error> {
+        let k = self.unwrap();
+        let lower = k.to_lowercase();
+        sqlx::query! {
+            r#" INSERT INTO term_info (document, term, lower, occurence) VALUES (?, ?, ?, 1)
+                        ON CONFLICT
+                            DO UPDATE SET occurence = 1 + occurence"#,
+            document, k, lower
+        }
+        .execute(pool)
+        .await
+    }
 }
 
 impl Into<String> for Token {
     fn into(self) -> String {
-        match self {
-            Token::Text(a) | Token::Punct(a) | Token::Unknown(a) | Token::Omit(a) => a,
-        }
+        self.unwrap()
     }
 }
 
@@ -229,21 +306,21 @@ fn tokenize(collector: &Vec<String>) -> Result<Vec<Token>, String> {
         .collect())
 }
 
-pub(crate) fn ngram2(items: &Vec<Token>) -> Vec<(&String, &String)> {
+pub(crate) fn ngram2(items: &Vec<Token>) -> Vec<NGram<(&Token, &Token)>> {
     let mut res = Vec::new();
     for it in items.iter().tuple_windows::<(_, _)>() {
         match it {
-            (Token::Text(a), Token::Text(b)) => res.push((a, b)),
+            (Token::Text(_), Token::Text(_)) => res.push(NGram::from(it)),
             _ => continue,
         }
     }
     res
 }
-pub(crate) fn ngram3(items: &Vec<Token>) -> Vec<(&String, &String, &String)> {
+pub(crate) fn ngram3(items: &Vec<Token>) -> Vec<NGram<(&Token, &Token, &Token)>> {
     let mut res = Vec::new();
     for it in items.iter().tuple_windows::<(_, _, _)>() {
         match it {
-            (Token::Text(a), Token::Text(b), Token::Text(c)) => res.push((a, b, c)),
+            (Token::Text(_), Token::Text(_), Token::Text(_)) => res.push(NGram::from(it)),
             _ => continue,
         }
     }
