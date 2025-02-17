@@ -116,6 +116,11 @@ pub(crate) fn tokenize_file(filename: std::path::PathBuf) -> Vec<Token> {
 fn match_node(node: &Node, collector: &mut Vec<String>) {
     match node {
         Node::Yaml(_) | Node::Html(_) | Node::Image(_) | Node::InlineCode(_) => {}
+        // Base case
+        Node::Text(text) => {
+            collector.push(text.value.to_owned());
+        }
+        // With children case
         Node::Root(root) => {
             for c in &root.children {
                 walk_ast(&c, collector)
@@ -131,10 +136,12 @@ fn match_node(node: &Node, collector: &mut Vec<String>) {
                 walk_ast(&c, collector);
             }
         }
-        Node::Text(text) => {
-            collector.push(text.value.to_owned());
+        Node::Heading(heading) => {
+            for c in &heading.children {
+                walk_ast(&c, collector);
+            }
         }
-        a => todo!("{:?}", a),
+        a => todo!("AST walker for {:?}", a),
     }
 }
 
