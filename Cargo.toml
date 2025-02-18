@@ -22,3 +22,4 @@ quick-xml = { version = "0.37.2", features = ["serde", "serialize"] }
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.137"
 serde_yaml = "0.9.34"
+tokio-stream = "0.1.17"

@@ -4,7 +4,9 @@ mod cli;
 mod parser;
 
 use clap::Parser;
+use indicatif::MultiProgress;
 use sqlx::SqlitePool;
+use tokio_stream::StreamExt;
 
 // TODO
 // - [ ] Since TFIDF is a per document value, how to aggregate tfidf for all documents?
@@ -47,6 +49,11 @@ async fn main() {
     );
 
     let mut count_iter = 0;
+
+    let pbar_multi = MultiProgress::new();
+    let pbar_skip = pbar_multi.add(pbar_skip);
+    let pbar_parse = pbar_multi.add(pbar_parse);
+
     for i in arg.root.read_dir().unwrap() {
         let name = i.unwrap();
         if count_iter == arg.size {
@@ -56,6 +63,7 @@ async fn main() {
             // SKIPPING manually because `.take_while()` doesn't seem to work with large directory entries.
             pbar_skip.set_message(format!("{}:SKIP", name.file_name().into_string().unwrap()));
             pbar_skip.inc(1);
+            pbar_parse.reset_elapsed();
             continue;
         }
         let n = name.file_name().into_string().unwrap();
@@ -71,34 +79,21 @@ async fn main() {
 
         let _ = q1.await.unwrap();
 
-        let mut tasks_tok = Vec::new();
-        let mut tasks_ng2 = Vec::new();
-        let mut tasks_ng3 = Vec::new();
-
-        for t in &tokens {
+        let mut stream_tok = tokio_stream::iter(&tokens);
+        while let Some(t) = stream_tok.next().await {
             if t.is_text() {
-                tasks_tok.push(t.register(&n, &pool));
+                t.register(&n, &pool).await.unwrap();
             };
         }
-        for ng2 in &ngram2_tokens {
-            tasks_ng2.push(ng2.register(&n, &pool));
+        let mut stream_ng2 = tokio_stream::iter(&ngram2_tokens);
+        while let Some(ng2) = stream_ng2.next().await {
+            ng2.register(&n, &pool).await.unwrap();
         }
-        for ng3 in &ngram3_tokens {
-            tasks_ng3.push(ng3.register(&n, &pool));
+        let mut stream_ng3 = tokio_stream::iter(&ngram3_tokens);
+        while let Some(ng3) = stream_ng3.next().await {
+            ng3.register(&n, &pool).await.unwrap();
         }
 
-        let _ = tasks_tok
-            .into_iter()
-            .map(|t| async { t.await.unwrap() })
-            .collect::<Vec<_>>();
-        let _ = tasks_ng2
-            .into_iter()
-            .map(|t| async { t.await.unwrap() })
-            .collect::<Vec<_>>();
-        let _ = tasks_ng3
-            .into_iter()
-            .map(|t| async { t.await.unwrap() })
-            .collect::<Vec<_>>();
         pbar_parse.set_message(format!("{}", name.file_name().into_string().unwrap()));
         count_iter += 1;
         pbar_parse.set_position(count_iter);
