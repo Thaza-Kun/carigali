@@ -115,12 +115,44 @@ pub(crate) fn tokenize_file(filename: std::path::PathBuf) -> Vec<Token> {
 }
 fn match_node(node: &Node, collector: &mut Vec<String>) {
     match node {
-        Node::Yaml(_) | Node::Html(_) | Node::Image(_) | Node::InlineCode(_) => {}
-        // Base case
+        // Ignore
+        Node::Yaml(_)
+        | Node::Toml(_)
+        | Node::Html(_)
+        | Node::MdxJsxFlowElement(_)
+        | Node::MdxjsEsm(_)
+        | Node::MdxFlowExpression(_)
+        | Node::MdxJsxTextElement(_)
+        | Node::MdxTextExpression(_)
+        | Node::ThematicBreak(_)
+        | Node::Break(_)
+        | Node::Math(_)
+        | Node::InlineMath(_)
+        | Node::FootnoteReference(_)
+        | Node::ImageReference(_)
+        | Node::Code(_)
+        | Node::InlineCode(_)
+        | Node::Link(_)
+        | Node::LinkReference(_)
+        | Node::Delete(_) => {}
+        // Pushes to collector
         Node::Text(text) => {
             collector.push(text.value.to_owned());
         }
-        // With children case
+        Node::Image(image) => {
+            if let Some(title) = &image.title {
+                collector.push(title.clone());
+            }
+        }
+        Node::Definition(definition) => {
+            if let Some(c) = &definition.label {
+                collector.push(c.clone());
+            }
+            if let Some(c) = &definition.title {
+                collector.push(c.clone());
+            }
+        }
+        // Continue walking ast
         Node::Root(root) => {
             for c in &root.children {
                 walk_ast(&c, collector)
@@ -141,7 +173,46 @@ fn match_node(node: &Node, collector: &mut Vec<String>) {
                 walk_ast(&c, collector);
             }
         }
-        a => todo!("AST walker for {:?}", a),
+        Node::Emphasis(emphasis) => {
+            for c in &emphasis.children {
+                walk_ast(&c, collector);
+            }
+        }
+        Node::Strong(strong) => {
+            for c in &strong.children {
+                walk_ast(&c, collector);
+            }
+        }
+        Node::Blockquote(blockquote) => {
+            for c in &blockquote.children {
+                walk_ast(&c, collector);
+            }
+        }
+        Node::FootnoteDefinition(footnote_definition) => {
+            for c in &footnote_definition.children {
+                walk_ast(&c, collector);
+            }
+        }
+        Node::Table(table) => {
+            for c in &table.children {
+                walk_ast(&c, collector);
+            }
+        }
+        Node::TableRow(table_row) => {
+            for c in &table_row.children {
+                walk_ast(&c, collector);
+            }
+        }
+        Node::TableCell(table_cell) => {
+            for c in &table_cell.children {
+                walk_ast(&c, collector);
+            }
+        }
+        Node::ListItem(list_item) => {
+            for c in &list_item.children {
+                walk_ast(&c, collector);
+            }
+        }
     }
 }
 
