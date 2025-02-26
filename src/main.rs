@@ -31,7 +31,7 @@ async fn main() {
         )
         .unwrap()
         .progress_chars("##-"),
-    );
+    ).with_finish(indicatif::ProgressFinish::Abandon);
 
     let processed = processed
         .await
@@ -46,7 +46,7 @@ async fn main() {
         )
         .unwrap()
         .progress_chars("##-"),
-    );
+    ).with_finish(indicatif::ProgressFinish::Abandon);
 
     let mut count_iter = 0;
 
