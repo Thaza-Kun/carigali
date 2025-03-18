@@ -27,15 +27,20 @@ async fn main() {
         sqlx::query_as! {Item,"SELECT DISTINCT(document) FROM doc_info"}.fetch_all(&pool);
     let pbar_parse = indicatif::ProgressBar::new(arg.size).with_style(
         indicatif::ProgressStyle::with_template(
-            "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len} | {per_sec:7} | {msg} {eta:3}",
+            "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len}| {per_sec:7} | {msg} {eta:3}",
         )
         .unwrap()
         .progress_chars("##-"),
     ).with_finish(indicatif::ProgressFinish::Abandon);
+    let pbar_bytes = indicatif::ProgressBar::no_length().with_style(
+        indicatif::ProgressStyle::with_template(
+            "^^^ {bytes_per_sec:3} ^^^"
+        ).unwrap()
+    ).with_finish(indicatif::ProgressFinish::Abandon);
 
     let processed = processed
         .await
-        .unwrap()
+        .unwrap_or(vec![])
         .into_iter()
         .map(|i| OsString::from(i.document.unwrap_or_default()))
         .collect::<Vec<OsString>>();
@@ -53,19 +58,22 @@ async fn main() {
     let pbar_multi = MultiProgress::new();
     let pbar_skip = pbar_multi.add(pbar_skip);
     let pbar_parse = pbar_multi.add(pbar_parse);
+    let pbar_bytes = pbar_multi.add(pbar_bytes);
 
     for i in arg.root.read_dir().unwrap() {
         let name = i.unwrap();
         if count_iter == arg.size {
             break;
         }
-        if processed.contains(&name.file_name()) {
-            // SKIPPING manually because `.take_while()` doesn't seem to work with large directory entries.
-            pbar_skip.set_message(format!("{}:SKIP", name.file_name().into_string().unwrap()));
-            pbar_skip.inc(1);
-            pbar_parse.reset_elapsed();
-            continue;
-        }
+        // if processed.contains(&name.file_name()) {
+        //     // SKIPPING manually because `.take_while()` doesn't seem to work with large directory entries.
+        //     pbar_skip.set_message(format!("{}:SKIP", name.file_name().into_string().unwrap()));
+        //     pbar_skip.inc(1);
+        //     pbar_parse.reset_elapsed();
+        //     pbar_bytes.reset_elapsed();
+        //     continue;
+        // }
+        pbar_skip.abandon();
         let n = name.file_name().into_string().unwrap();
         let q1 = sqlx::query! {
             r#"INSERT INTO doc_info (document, term_count) VALUES (?, 0)"#,
@@ -97,5 +105,7 @@ async fn main() {
         pbar_parse.set_message(format!("{}", name.file_name().into_string().unwrap()));
         count_iter += 1;
         pbar_parse.set_position(count_iter);
+        let n_bytes = n.as_bytes().iter().sum::<u8>();
+        pbar_bytes.inc(n_bytes as u64);
     }
 }
