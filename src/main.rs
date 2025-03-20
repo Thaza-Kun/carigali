@@ -4,9 +4,13 @@ mod cli;
 mod parser;
 
 use clap::Parser;
-use indicatif::MultiProgress;
 use sqlx::SqlitePool;
 use tokio_stream::StreamExt;
+
+use tracing::{self, info_span};
+use tracing_indicatif::{span_ext::IndicatifSpanExt, IndicatifLayer};
+use tracing_subscriber::Layer;
+use tracing_subscriber::{self, layer::SubscriberExt, util::SubscriberInitExt};
 
 // TODO
 // - [ ] Since TFIDF is a per document value, how to aggregate tfidf for all documents?
@@ -19,25 +23,36 @@ struct Item {
 
 #[tokio::main]
 async fn main() {
+    let indicatif_layer = IndicatifLayer::new();
+    let _subscriber = tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(indicatif_layer.get_stderr_writer())
+                .with_filter(tracing_subscriber::filter::filter_fn(|metadata| {
+                    metadata.target() == "carigali"
+                })),
+        )
+        .with(indicatif_layer)
+        .init();
+
     let pool = SqlitePool::connect(env!("DATABASE_URL"));
     let arg = cli::Args::parse();
 
     let pool = pool.await.unwrap();
     let processed =
         sqlx::query_as! {Item,"SELECT DISTINCT(document) FROM doc_info"}.fetch_all(&pool);
-    let pbar_parse = indicatif::ProgressBar::new(arg.size).with_style(
-        indicatif::ProgressStyle::with_template(
+    tracing::info! {DATABASE_URL=env!("DATABASE_URL"), "Establishing connection:"};
+
+    let pbar_parse_span = info_span!("parser");
+    let pbar_skips_span = info_span!("skips");
+
+    pbar_parse_span.pb_set_style(
+        &indicatif::ProgressStyle::with_template(
             "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len}| {per_sec:7} | {msg} {eta:3}",
         )
         .unwrap()
         .progress_chars("##-"),
-    ).with_finish(indicatif::ProgressFinish::Abandon);
-    let pbar_bytes = indicatif::ProgressBar::no_length().with_style(
-        indicatif::ProgressStyle::with_template(
-            "^^^ {bytes_per_sec:3} ^^^"
-        ).unwrap()
-    ).with_finish(indicatif::ProgressFinish::Abandon);
-
+    );
     let processed = processed
         .await
         .unwrap_or(vec![])
@@ -45,36 +60,39 @@ async fn main() {
         .map(|i| OsString::from(i.document.unwrap_or_default()))
         .collect::<Vec<OsString>>();
     let skip_len = processed.len() as u64;
-    let pbar_skip = indicatif::ProgressBar::new(skip_len).with_style(
-        indicatif::ProgressStyle::with_template(
+    pbar_skips_span.pb_set_style(
+        &indicatif::ProgressStyle::with_template(
             "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len} | {per_sec:7} | {msg} {eta:3}",
         )
         .unwrap()
         .progress_chars("##-"),
-    ).with_finish(indicatif::ProgressFinish::Abandon);
+    );
 
-    let mut count_iter = 0;
+    pbar_parse_span.pb_set_length(arg.size);
+    pbar_skips_span.pb_set_length(skip_len);
 
-    let pbar_multi = MultiProgress::new();
-    let pbar_skip = pbar_multi.add(pbar_skip);
-    let pbar_parse = pbar_multi.add(pbar_parse);
-    let pbar_bytes = pbar_multi.add(pbar_bytes);
+    let pbar_bytes = indicatif::ProgressBar::hidden();
 
+    let mut count = 0;
+    let mut count_skip = 0;
+    tracing::info! {"--root"=arg.root.to_str(), "Reading `--root`:"};
     for i in arg.root.read_dir().unwrap() {
-        let name = i.unwrap();
-        if count_iter == arg.size {
+        if count == arg.size {
             break;
         }
-        // if processed.contains(&name.file_name()) {
-        //     // SKIPPING manually because `.take_while()` doesn't seem to work with large directory entries.
-        //     pbar_skip.set_message(format!("{}:SKIP", name.file_name().into_string().unwrap()));
-        //     pbar_skip.inc(1);
-        //     pbar_parse.reset_elapsed();
-        //     pbar_bytes.reset_elapsed();
-        //     continue;
-        // }
-        pbar_skip.abandon();
+        let name = i.unwrap();
+        if processed.contains(&name.file_name()) {
+            pbar_skips_span.in_scope(|| {
+                tracing::info! {target: "carigali", filename=&name.file_name().to_str().unwrap(), "Skipping"}
+            });
+            pbar_skips_span.pb_inc(1);
+            count_skip += 1;
+            continue;
+        }
         let n = name.file_name().into_string().unwrap();
+        pbar_parse_span.in_scope(|| {
+            tracing::info! {target: "carigali", filename=n, "Reading file."};
+        });
         let q1 = sqlx::query! {
             r#"INSERT INTO doc_info (document, term_count) VALUES (?, 0)"#,
             n
@@ -102,10 +120,12 @@ async fn main() {
             ng3.register(&n, &pool).await.unwrap();
         }
 
-        pbar_parse.set_message(format!("{}", name.file_name().into_string().unwrap()));
-        count_iter += 1;
-        pbar_parse.set_position(count_iter);
         let n_bytes = n.as_bytes().iter().sum::<u8>();
         pbar_bytes.inc(n_bytes as u64);
+        pbar_parse_span.in_scope(|| {
+            tracing::info! {target: "carigali", filename=n, "Done reading file at {:.3} B/s", pbar_bytes.per_sec()};
+        });
+        pbar_parse_span.pb_inc(1);
+        count += 1;
     }
 }

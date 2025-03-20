@@ -25,6 +25,7 @@ fn main() {
     println!("Reading from {}", filepath.display());
     let data = parse_xml(read_lines(filepath).unwrap(), &pbar);
     pbar.finish_with_message("done");
+    pbar.reset();
     let mut dir = args.wikipath.clone();
     dir.push(args.output.unwrap_or("raw".into()));
     // path::PathBuf::from("testoutput/raw");
