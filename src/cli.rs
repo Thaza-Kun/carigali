@@ -1,12 +1,21 @@
-use clap::Parser;
+use clap::{Args, Parser};
 
-#[derive(Parser)]
-pub(crate) struct Args {
+#[derive(Args)]
+pub(crate) struct Stream {
     #[arg(long)]
     pub root: std::path::PathBuf,
     #[arg(long)]
     pub size: u64,
-    #[deprecated]
+}
+
+#[derive(Args)]
+pub(crate) struct Rank {
     #[arg(long)]
-    pub files: std::path::PathBuf,
+    pub word: String,
+}
+
+#[derive(Parser)]
+pub(crate) enum Main {
+    Stream(Stream),
+    Rank(Rank),
 }

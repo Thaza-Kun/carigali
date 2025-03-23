@@ -4,6 +4,8 @@ mod cli;
 mod parser;
 
 use clap::Parser;
+use cli::Main;
+use itertools::Itertools;
 use sqlx::SqlitePool;
 use tokio_stream::StreamExt;
 
@@ -23,6 +25,69 @@ struct Item {
 
 #[tokio::main]
 async fn main() {
+    let command = Main::parse();
+    match command {
+        Main::Stream(streamer) => stream(streamer).await,
+        Main::Rank(ranker) => rank(ranker).await,
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct TermTable {
+    document: String,
+    term: String,
+    lower: String,
+    occurence: i64,
+    frequency: Option<f64>,
+}
+
+fn rank_term_frequency(items: &Vec<TermTable>) -> Vec<f64> {
+    items
+        .iter()
+        .map(|i| i.frequency.unwrap_or(0.))
+        .collect_vec()
+}
+
+fn rank_inv_document_freuqency(items: &Vec<TermTable>, total_docs: u64) -> f64 {
+    (total_docs as f64 / (1. + items.len() as f64)).log10()
+}
+
+fn rank_tf_idf(items: &Vec<TermTable>, total_docs: u64) -> Vec<f64> {
+    let idf = rank_inv_document_freuqency(items, total_docs);
+    rank_term_frequency(items)
+        .iter()
+        .map(|i| i * idf)
+        .collect_vec()
+}
+
+async fn rank(arg: cli::Rank) {
+    let pool = SqlitePool::connect(env!("DATABASE_URL"));
+    let pool = pool.await.unwrap();
+
+    let word_lower = arg.word.to_lowercase();
+
+    let item = sqlx::query_as! {TermTable, "SELECT * FROM term_info WHERE lower = ?", word_lower}
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+    let total_docs = sqlx::query! {"SELECT COUNT(document) as count FROM doc_info"}
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    println!(
+        "IDF for {} is {:.5}",
+        word_lower,
+        rank_inv_document_freuqency(&item, total_docs.count as u64)
+    );
+    let ranks = rank_tf_idf(&item, total_docs.count as u64);
+    for (tfidf, term) in ranks.iter().zip(item).take(10) {
+        println!("TFIDF is {:.5} for {:?}", tfidf, term);
+    }
+}
+
+async fn stream(arg: cli::Stream) {
     let indicatif_layer = IndicatifLayer::new();
     let _subscriber = tracing_subscriber::registry()
         .with(
@@ -36,9 +101,8 @@ async fn main() {
         .init();
 
     let pool = SqlitePool::connect(env!("DATABASE_URL"));
-    let arg = cli::Args::parse();
-
     let pool = pool.await.unwrap();
+
     let processed =
         sqlx::query_as! {Item,"SELECT DISTINCT(document) FROM doc_info"}.fetch_all(&pool);
     tracing::info! {DATABASE_URL=env!("DATABASE_URL"), "Establishing connection:"};
@@ -62,7 +126,7 @@ async fn main() {
     let skip_len = processed.len() as u64;
     pbar_skips_span.pb_set_style(
         &indicatif::ProgressStyle::with_template(
-            "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len} | {per_sec:7} | {msg} {eta:3}",
+            "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len} | {eta:3}",
         )
         .unwrap()
         .progress_chars("##-"),
@@ -73,8 +137,7 @@ async fn main() {
 
     let pbar_bytes = indicatif::ProgressBar::hidden();
 
-    let mut count = 0;
-    let mut count_skip = 0;
+    let mut count: u64 = 0;
     tracing::info! {"--root"=arg.root.to_str(), "Reading `--root`:"};
     for i in arg.root.read_dir().unwrap() {
         if count == arg.size {
@@ -86,7 +149,6 @@ async fn main() {
                 tracing::info! {target: "carigali", filename=&name.file_name().to_str().unwrap(), "Skipping"}
             });
             pbar_skips_span.pb_inc(1);
-            count_skip += 1;
             continue;
         }
         let n = name.file_name().into_string().unwrap();
@@ -120,12 +182,12 @@ async fn main() {
             ng3.register(&n, &pool).await.unwrap();
         }
 
-        let n_bytes = n.as_bytes().iter().sum::<u8>();
-        pbar_bytes.inc(n_bytes as u64);
+        let n_bytes = n.as_bytes().iter().fold(0, |acc, curr| acc + *curr as u64);
+        pbar_bytes.inc(n_bytes);
         pbar_parse_span.in_scope(|| {
             tracing::info! {target: "carigali", filename=n, "Done reading file at {:.3} B/s", pbar_bytes.per_sec()};
         });
         pbar_parse_span.pb_inc(1);
-        count += 1;
+        count += 1
     }
 }

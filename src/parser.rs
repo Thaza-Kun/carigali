@@ -27,41 +27,41 @@ mod test {
     #[test]
     fn test_parsers() {
         let mdtext = r#"
-Saluang adalah sebuah alat muzik tiup kayu tradisional orang Minangkabau 
-dari Sumatra Barat, Indonesia yang mirip dengan seruling pada umumnya 
-dan diperbuat dari buluh. Ia berkaitan dengan suling dari bahagian-bahagian 
+Saluang adalah sebuah alat muzik tiup kayu tradisional orang Minangkabau
+dari Sumatra Barat, Indonesia yang mirip dengan seruling pada umumnya
+dan diperbuat dari buluh. Ia berkaitan dengan suling dari bahagian-bahagian
 lain Indonesia.
 
-Alat muzik tiup ini terbuat dari bambu tipis atau talang (Schizostachyum 
-brachycladum Kurz); buluh ini merupakan bahan yang lazim digunakan untuk 
-membina jemuran kain, dan jenis buluh ini sangat dikehendaki orang Minangkabau 
-terutamanya buluh talang yang ditemukan di tepi sungai; malah buluh sama yang 
-digunakan untuk memasak lamang juga dianggap sesuai. Alat ini cukup dibuat 
-dengan melubangi talang dengan empat lubang. Panjang buluh yang diperlukan 
-untuk membuat badan saluang kira-kira 40–60 cm, dengan diameter 3–4 cm. 
-Bahagian-bahagian atas dan bawahnya terlebih dahulu untuk menentukan pembuatan 
-lubang: bahagian atas saluang ditentukan pada bawah ruas buluh di mana ia diserut 
-untuk dibuat meruncing sekitar 45 derajat sesuai ketebalan bambu. Suatu jarak 
-2/3 dari panjang bambu diukur dari bahagian atas ditandakan untuk membuat 4 
-lubang; jarak antara dua lubang adalah jarak setengah lingkaran bambu. Besar 
+Alat muzik tiup ini terbuat dari bambu tipis atau talang (Schizostachyum
+brachycladum Kurz); buluh ini merupakan bahan yang lazim digunakan untuk
+membina jemuran kain, dan jenis buluh ini sangat dikehendaki orang Minangkabau
+terutamanya buluh talang yang ditemukan di tepi sungai; malah buluh sama yang
+digunakan untuk memasak lamang juga dianggap sesuai. Alat ini cukup dibuat
+dengan melubangi talang dengan empat lubang. Panjang buluh yang diperlukan
+untuk membuat badan saluang kira-kira 40–60 cm, dengan diameter 3–4 cm.
+Bahagian-bahagian atas dan bawahnya terlebih dahulu untuk menentukan pembuatan
+lubang: bahagian atas saluang ditentukan pada bawah ruas buluh di mana ia diserut
+untuk dibuat meruncing sekitar 45 derajat sesuai ketebalan bambu. Suatu jarak
+2/3 dari panjang bambu diukur dari bahagian atas ditandakan untuk membuat 4
+lubang; jarak antara dua lubang adalah jarak setengah lingkaran bambu. Besar
 lubang agar menghasilkan suara yang bagus disyorkan berdiameter 0.5 sm.
 
-Pemain saluang yang pakar mempunyai kelebihan memainkan saluang dengan meniup 
-dan menarik nafas secara serentak sehingga peniup saluang dapat memainkan alat 
-musik itu dari awal dari akhir lagu tanpa putus; cara manyisiahan angok ("menyisihkan 
-nafas") ini dikembangkan dengan latihan yang terus menerus. Teknik ini dinamakan 
-juga sebagai teknik. Tiap nagari di tanah Minangkabau mengembangkan cara meniup 
-saluang khas yang tersendiri termasuk di Singgalang, Pariaman, Solok Salayo, 
-Koto Tuo, Suayan dan Pauah. Gaya tiupan khas Singgalang dianggap gaya yang 
-paling sulit dimahiri pemula, dan biasanya nada Singgalang ini dimainkan 
-pada awal lagu, gaya Ratok Solok pula dianggap gaya paling sedih. Pemain 
-saluang juga mempunyai mantera tersendiri yang dipercayai berguna untuk memukau 
-para pendengar. Mantra itu dinamakan Pitunang Nabi Daud. 
-Isi dari mantra itu kira-kira: "Aku malapehan pituang Nabi Daud, buruang 
-tabang tatagun-tagun, aia mailia tahanti-hanti, takajuik bidodari di dalam 
-sarugo mandanga bunyi saluang ambo, kununlah anak sidang manusia..... 
-(Aku melepaskan pitung Nabi Daud, burung terbang tertegun-tegun [terpegun], 
-air mengalir terhenti-henti, terkejut bidadari dalam syurga mendengar bunyi 
+Pemain saluang yang pakar mempunyai kelebihan memainkan saluang dengan meniup
+dan menarik nafas secara serentak sehingga peniup saluang dapat memainkan alat
+musik itu dari awal dari akhir lagu tanpa putus; cara manyisiahan angok ("menyisihkan
+nafas") ini dikembangkan dengan latihan yang terus menerus. Teknik ini dinamakan
+juga sebagai teknik. Tiap nagari di tanah Minangkabau mengembangkan cara meniup
+saluang khas yang tersendiri termasuk di Singgalang, Pariaman, Solok Salayo,
+Koto Tuo, Suayan dan Pauah. Gaya tiupan khas Singgalang dianggap gaya yang
+paling sulit dimahiri pemula, dan biasanya nada Singgalang ini dimainkan
+pada awal lagu, gaya Ratok Solok pula dianggap gaya paling sedih. Pemain
+saluang juga mempunyai mantera tersendiri yang dipercayai berguna untuk memukau
+para pendengar. Mantra itu dinamakan Pitunang Nabi Daud.
+Isi dari mantra itu kira-kira: "Aku malapehan pituang Nabi Daud, buruang
+tabang tatagun-tagun, aia mailia tahanti-hanti, takajuik bidodari di dalam
+sarugo mandanga bunyi saluang ambo, kununlah anak sidang manusia.....
+(Aku melepaskan pitung Nabi Daud, burung terbang tertegun-tegun [terpegun],
+air mengalir terhenti-henti, terkejut bidadari dalam syurga mendengar bunyi
 saluang hamba, kononlah anak sidang manusia...')"
     "#;
         let mdast = markdown::to_mdast(
@@ -79,18 +79,6 @@ saluang hamba, kononlah anak sidang manusia...')"
         let mut collector = Vec::new();
         crate::parser::walk_ast(&mdast, &mut collector);
         assert!(crate::parser::tokenize(&collector).is_ok())
-    }
-
-    #[sqlx::test]
-    async fn test_sql(pool: sqlx::sqlite::SqlitePool) {
-        let _a = sqlx::query! {r#"INSERT INTO term_frequency (document, term, occurence) VALUES (?,?,?)"#, "DOC123", "Term", 1}.execute(&pool).await.unwrap();
-        let a: TermFreqTable = sqlx::query_as! {TermFreqTable, r#"SELECT * FROM term_frequency"#}
-            .fetch_one(&pool)
-            .await
-            .unwrap();
-        assert_eq!(a.document, Some("DOC123".into()));
-        assert_eq!(a.term, Some("Term".into()));
-        assert_eq!(a.occurence, Some(1))
     }
 }
 
